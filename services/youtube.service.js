@@ -1,6 +1,19 @@
-const youtubedl = require('youtube-dl-exec');
 const fs = require('fs');
 const path = require('path');
+
+// --- MAGIA PARA RENDER ---
+// Si estamos en Render, usamos el yt-dlp global que instaló Docker.
+// Si estamos en tu ordenador, usamos el de node_modules.
+let youtubedl;
+if (fs.existsSync('/usr/local/bin/yt-dlp')) {
+    const { create } = require('youtube-dl-exec');
+    youtubedl = create('/usr/local/bin/yt-dlp');
+    console.log("🟢 Usando motor yt-dlp de Render");
+} else {
+    youtubedl = require('youtube-dl-exec');
+    console.log("💻 Usando motor yt-dlp local");
+}
+// -------------------------
 
 // Asegurarnos de que la carpeta de descargas existe en la raíz
 const downloadsDir = path.join(process.cwd(), 'downloads');
