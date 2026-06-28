@@ -42,6 +42,8 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: err.message });
 });
 
+
+
 // Habilitar cierre graceful del bot de telegram
 process.once('SIGINT', () => {
     try {

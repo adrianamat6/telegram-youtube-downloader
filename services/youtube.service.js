@@ -34,25 +34,24 @@ const downloadMedia = async (videoId, format) => {
         console.log("⚠️ No se han detectado cookies. Podría fallar en Render");
     }
 
-    // Opciones de descarga (con bypass de cookies si existe el archivo)
+    // Opciones de descarga inteligentes:
+    // Si hay cookies, quitamos 'web_embedded' para evitar conflictos de sesión.
     const options = format === 'mp4' 
         ? {
             f: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             mergeOutputFormat: 'mp4',
             o: outputPath,
             noWarnings: true,
-            extractorArgs: 'youtube:player_client=web_embedded',
             noCacheDir: true,
-            ...(hasCookies ? { cookies: cookiesPath } : {}) // Solo añade las cookies si el archivo existe
+            ...(hasCookies ? { cookies: cookiesPath } : { extractorArgs: 'youtube:player_client=web_embedded' })
         }
         : {
             x: true,
             audioFormat: 'mp3',
             o: outputPath,
             noWarnings: true,
-            extractorArgs: 'youtube:player_client=web_embedded',
             noCacheDir: true,
-            ...(hasCookies ? { cookies: cookiesPath } : {})
+            ...(hasCookies ? { cookies: cookiesPath } : { extractorArgs: 'youtube:player_client=web_embedded' })
         };
 
     // Ejecutar la descarga
