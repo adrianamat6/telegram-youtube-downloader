@@ -2,9 +2,9 @@ const { Markup } = require('telegraf');
 const fs = require('fs');
 const { downloadMedia } = require('../services/youtube.service');
 
-// Función de ayuda para extraer el ID de YouTube
+// Función de ayuda MEJORADA: Ahora detecta también enlaces /live/ y /shorts/
 function getYoutubeId(url) {
-    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|live\/|shorts\/)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
 }
@@ -12,6 +12,11 @@ function getYoutubeId(url) {
 // Inyectamos el bot para configurarle los "listeners"
 const setupBotControllers = (bot) => {
     
+    // 0. Le enseñamos a responder al comando /start para saber que está vivo
+    bot.start((ctx) => {
+        ctx.reply('¡Hola! 👋 Envíame cualquier enlace de YouTube y te lo descargaré.');
+    });
+
     // 1. Escuchar cualquier texto (buscando un enlace)
     bot.on('text', async (ctx) => {
         const text = ctx.message.text;
@@ -24,6 +29,9 @@ const setupBotControllers = (bot) => {
                     Markup.button.callback('🎵 Descargar Audio (MP3)', `dl_mp3|${videoId}`)
                 ])
             );
+        } else if (!text.startsWith('/')) {
+            // Si nos escribe algo que no detecta como YouTube, nos avisa en lugar de ignorarnos
+            await ctx.reply('🤔 No he detectado un enlace de YouTube válido. Prueba a copiar el enlace estándar.');
         }
     });
 
