@@ -1,5 +1,5 @@
 const http = require("node:http");
-const app = require("./src/app");
+const app = require("./app");
 require("dotenv").config();
 
 const server = http.createServer(app);
