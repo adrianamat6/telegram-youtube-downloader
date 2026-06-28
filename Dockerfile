@@ -16,7 +16,7 @@ WORKDIR /app
 # Copiamos los archivos de dependencias e instalamos
 COPY package*.json ./
 # Aquí también ignoramos los scripts para que use el yt-dlp del sistema
-RUN npm install --ignore-scripts
+RUN npm install
 
 # Copiamos el resto de tu código
 COPY . .
