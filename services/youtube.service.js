@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// --- MAGIA PARA RENDER ---
+// --- MOTOR yt-dlp ---
 let youtubedl;
 if (fs.existsSync('/usr/local/bin/yt-dlp')) {
     const { create } = require('youtube-dl-exec');
@@ -11,12 +11,28 @@ if (fs.existsSync('/usr/local/bin/yt-dlp')) {
     youtubedl = require('youtube-dl-exec');
     console.log("💻 Usando motor yt-dlp local");
 }
-// -------------------------
 
-// Asegurarnos de que la carpeta de descargas existe en la raíz
+// --- CARPETA DE DESCARGAS ---
 const downloadsDir = path.join(process.cwd(), 'downloads');
 if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
+}
+
+// --- COOKIES: copiarlas a /tmp/ para que yt-dlp pueda escribir ---
+const SECRET_COOKIES = '/etc/secrets/cookies.txt';
+const TMP_COOKIES = '/tmp/cookies.txt';
+
+let cookiesPath = null;
+
+if (fs.existsSync(SECRET_COOKIES)) {
+    fs.copyFileSync(SECRET_COOKIES, TMP_COOKIES); // Copia a /tmp/ (tiene escritura)
+    cookiesPath = TMP_COOKIES;
+    console.log("🍪 Cookies copiadas a /tmp/ y listas para usar");
+} else if (fs.existsSync(path.join(process.cwd(), 'cookies.txt'))) {
+    cookiesPath = path.join(process.cwd(), 'cookies.txt');
+    console.log("🍪 Usando cookies locales del proyecto");
+} else {
+    console.warn("⚠️ No se encontraron cookies. YouTube puede bloquear las descargas.");
 }
 
 const downloadMedia = async (videoId, format) => {
@@ -24,40 +40,34 @@ const downloadMedia = async (videoId, format) => {
     const outputFilename = `${videoId}_${Date.now()}.${format}`;
     const outputPath = path.join(downloadsDir, outputFilename);
 
-    // Ruta donde guardaremos las cookies de forma segura en Render
-    const cookiesPath = '/etc/secrets/cookies.txt';
-    const hasCookies = fs.existsSync(cookiesPath);
-
-    if (hasCookies) {
-        console.log("🍪 Usando archivo de cookies de YouTube para la descarga");
-    } else {
-        console.log("⚠️ No se han detectado cookies. Podría fallar en Render");
+    // Recopiar cookies en cada descarga por si se actualizan
+    if (fs.existsSync(SECRET_COOKIES)) {
+        fs.copyFileSync(SECRET_COOKIES, TMP_COOKIES);
     }
 
-    // Opciones de descarga inteligentes:
-    // Si hay cookies, quitamos 'web_embedded' para evitar conflictos de sesión.
-    const options = format === 'mp4' 
+    const baseOptions = {
+        o: outputPath,
+        noWarnings: true,
+        noCacheDir: true,
+        // Formato más permisivo: acepta lo que haya disponible
+        ...(cookiesPath && { cookies: cookiesPath })
+    };
+
+    const options = format === 'mp4'
         ? {
-            f: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            ...baseOptions,
+            // Formato más permisivo para evitar "not available"
+            f: 'bestvideo+bestaudio/best',
             mergeOutputFormat: 'mp4',
-            o: outputPath,
-            noWarnings: true,
-            noCacheDir: true,
-            ...(hasCookies ? { cookies: cookiesPath } : { extractorArgs: 'youtube:player_client=web_embedded' })
         }
         : {
+            ...baseOptions,
             x: true,
             audioFormat: 'mp3',
-            o: outputPath,
-            noWarnings: true,
-            noCacheDir: true,
-            ...(hasCookies ? { cookies: cookiesPath } : { extractorArgs: 'youtube:player_client=web_embedded' })
         };
 
-    // Ejecutar la descarga
     await youtubedl(url, options);
 
-    // Calcular el peso del archivo
     const stats = fs.statSync(outputPath);
     const fileSizeInMB = stats.size / (1024 * 1024);
 
