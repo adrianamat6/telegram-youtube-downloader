@@ -2,8 +2,6 @@ const fs = require('fs');
 const path = require('path');
 
 // --- MAGIA PARA RENDER ---
-// Si estamos en Render, usamos el yt-dlp global que instaló Docker.
-// Si estamos en tu ordenador, usamos el de node_modules.
 let youtubedl;
 if (fs.existsSync('/usr/local/bin/yt-dlp')) {
     const { create } = require('youtube-dl-exec');
@@ -26,19 +24,23 @@ const downloadMedia = async (videoId, format) => {
     const outputFilename = `${videoId}_${Date.now()}.${format}`;
     const outputPath = path.join(downloadsDir, outputFilename);
 
-    // Opciones equivalentes a yt-dlp en Python
+    // Opciones de descarga que incluyen el truco del reproductor incrustado para burlar el antibot
     const options = format === 'mp4' 
         ? {
             f: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             mergeOutputFormat: 'mp4',
             o: outputPath,
-            noWarnings: true
+            noWarnings: true,
+            extractorArgs: 'youtube:player_client=web_embedded', // El truco mágico de bypass
+            noCacheDir: true // Evita que se queden cacheados bloqueos
         }
         : {
             x: true,
             audioFormat: 'mp3',
             o: outputPath,
-            noWarnings: true
+            noWarnings: true,
+            extractorArgs: 'youtube:player_client=web_embedded', // El truco mágico de bypass
+            noCacheDir: true
         };
 
     // Ejecutar la descarga
