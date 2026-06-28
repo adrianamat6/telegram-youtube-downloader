@@ -44,11 +44,15 @@ app.use((err, req, res, next) => {
 
 // Habilitar cierre graceful del bot de telegram
 process.once('SIGINT', () => {
-    if (!process.env.BOT_URL) bot.stop('SIGINT');
+    try {
+        if (!process.env.BOT_URL) bot.stop('SIGINT');
+    } catch (e) { /* ignorar si el bot no estaba corriendo */ }
     process.exit(0);
 });
 process.once('SIGTERM', () => {
-    if (!process.env.BOT_URL) bot.stop('SIGTERM');
+    try {
+        if (!process.env.BOT_URL) bot.stop('SIGTERM');
+    } catch (e) { /* ignorar si el bot no estaba corriendo */ }
     process.exit(0);
 });
 

@@ -24,23 +24,35 @@ const downloadMedia = async (videoId, format) => {
     const outputFilename = `${videoId}_${Date.now()}.${format}`;
     const outputPath = path.join(downloadsDir, outputFilename);
 
-    // Opciones de descarga que incluyen el truco del reproductor incrustado para burlar el antibot
+    // Ruta donde guardaremos las cookies de forma segura en Render
+    const cookiesPath = '/etc/secrets/cookies.txt';
+    const hasCookies = fs.existsSync(cookiesPath);
+
+    if (hasCookies) {
+        console.log("🍪 Usando archivo de cookies de YouTube para la descarga");
+    } else {
+        console.log("⚠️ No se han detectado cookies. Podría fallar en Render");
+    }
+
+    // Opciones de descarga (con bypass de cookies si existe el archivo)
     const options = format === 'mp4' 
         ? {
             f: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             mergeOutputFormat: 'mp4',
             o: outputPath,
             noWarnings: true,
-            extractorArgs: 'youtube:player_client=web_embedded', // El truco mágico de bypass
-            noCacheDir: true // Evita que se queden cacheados bloqueos
+            extractorArgs: 'youtube:player_client=web_embedded',
+            noCacheDir: true,
+            ...(hasCookies ? { cookies: cookiesPath } : {}) // Solo añade las cookies si el archivo existe
         }
         : {
             x: true,
             audioFormat: 'mp3',
             o: outputPath,
             noWarnings: true,
-            extractorArgs: 'youtube:player_client=web_embedded', // El truco mágico de bypass
-            noCacheDir: true
+            extractorArgs: 'youtube:player_client=web_embedded',
+            noCacheDir: true,
+            ...(hasCookies ? { cookies: cookiesPath } : {})
         };
 
     // Ejecutar la descarga
