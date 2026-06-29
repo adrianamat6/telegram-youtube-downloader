@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
 // --- CARPETA DE DESCARGAS ---
@@ -9,11 +10,28 @@ if (!fs.existsSync(downloadsDir)) {
     fs.mkdirSync(downloadsDir, { recursive: true });
 }
 
-// Lista de instancias de Cobalt. Si la oficial nos bloquea, probamos las alternativas de la comunidad.
-const COBALT_INSTANCES = [
-    "https://api.cobalt.tools/",
-    "https://cobalt.api.timelessnesses.me/"
-];
+// 🧠 MAGIA: Función que busca servidores vivos de la comunidad en tiempo real
+async function getCobaltInstances() {
+    try {
+        console.log("🔍 Buscando servidores Cobalt disponibles en la comunidad...");
+        const response = await fetch("https://instances.cobalt.best/api/instances.json");
+        const data = await response.json();
+        
+        // Filtramos solo los servidores que están online (y descartamos el oficial que pide API key)
+        const activeInstances = data
+            .filter(inst => inst.apiOnline === true && !inst.url.includes("api.cobalt.tools"))
+            .map(inst => inst.url);
+            
+        return activeInstances;
+    } catch (e) {
+        console.warn("⚠️ No se pudo cargar la lista dinámica. Usando servidores de respaldo.");
+        return [
+            "https://cobalt.canine.tools",
+            "https://cobalt.meowing.de",
+            "https://co.wuk.sh"
+        ];
+    }
+}
 
 const downloadMedia = async (videoId, format) => {
     if (!['mp4', 'mp3'].includes(format)) {
@@ -25,70 +43,59 @@ const downloadMedia = async (videoId, format) => {
     const outputFilename = `${baseName}.${format}`;
     const outputPath = path.join(downloadsDir, outputFilename);
 
-    console.log(`⬇️ Pidiendo enlace a Cobalt API para: ${url} en formato ${format}`);
+    console.log(`⬇️ Procesando video: ${videoId} en formato ${format}`);
 
+    // Obtenemos los servidores frescos
+    const instances = await getCobaltInstances();
     let directDownloadUrl = null;
     let lastError = null;
 
-    // Intentamos extraer el enlace pasando por las distintas instancias de Cobalt
-    for (const instance of COBALT_INSTANCES) {
-        console.log(`🧪 Probando con la instancia: ${instance}`);
+    // Probamos suerte con los servidores de la comunidad uno por uno
+    for (const instance of instances) {
+        console.log(`🧪 Intentando extraer con: ${instance}`);
         
         try {
-            const apiResponse = await fetch(instance, {
+            const apiResponse = await fetch(`${instance}/`, {
                 method: "POST",
                 headers: {
                     "Accept": "application/json",
                     "Content-Type": "application/json",
-                    // Engañamos al sistema haciéndonos pasar por un usuario real en Windows
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 },
                 body: JSON.stringify({
                     url: url,
-                    // Parámetros API v7 (Actual)
                     downloadMode: format === 'mp3' ? 'audio' : 'auto',
                     audioFormat: format === 'mp3' ? 'mp3' : 'best',
-                    videoQuality: "1080",
-                    
-                    // Parámetros API v6 (Por si la instancia espejo usa software más antiguo)
-                    isAudioOnly: format === 'mp3',
-                    aFormat: format === 'mp3' ? 'mp3' : 'best',
-                    vQuality: "1080"
+                    videoQuality: "1080"
                 })
             });
 
-            // Si la API falla, extraemos el texto EXACTO del error
             if (!apiResponse.ok) {
-                const errorText = await apiResponse.text();
-                throw new Error(`HTTP ${apiResponse.status} - Detalles: ${errorText}`);
+                throw new Error(`HTTP ${apiResponse.status}`);
             }
 
             const data = await apiResponse.json();
             
-            // Si nos da la URL, salimos del bucle con éxito
+            // Si nos da la URL, cortamos el bucle (¡Éxito!)
             if (data && data.url) {
                 directDownloadUrl = data.url;
-                console.log(`✅ ¡Éxito con ${instance}!`);
+                console.log(`✅ ¡Enlace obtenido gracias a ${instance}!`);
                 break; 
-            } else {
-                throw new Error("La API respondió, pero sin enlace. Respuesta: " + JSON.stringify(data));
             }
 
         } catch (error) {
-            console.warn(`⚠️ Falló la instancia ${instance}: ${error.message}`);
+            console.warn(`⚠️ Servidor ${instance} ocupado o caído. Pasando al siguiente...`);
             lastError = error;
         }
     }
 
-    // Si fallaron TODAS las instancias, tiramos el error para que avise a Telegram
     if (!directDownloadUrl) {
-        throw new Error(`Todas las instancias de Cobalt fallaron. Último error: ${lastError?.message}`);
+        throw new Error(`Todos los servidores públicos están bloqueados en este momento. Intenta más tarde.`);
     }
 
-    console.log("✅ Iniciando descarga del archivo a disco local...");
+    console.log("📥 Iniciando descarga del archivo físico a tu servidor Render...");
 
     try {
-        // Descargamos el archivo real desde la URL obtenida (añadiendo también el User-Agent)
         const fileResponse = await fetch(directDownloadUrl, {
             headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -96,12 +103,13 @@ const downloadMedia = async (videoId, format) => {
         });
         
         if (!fileResponse.ok) {
-            throw new Error(`Error HTTP ${fileResponse.status} al descargar el archivo físico.`);
+            throw new Error(`Error HTTP ${fileResponse.status} al descargar el archivo.`);
         }
 
-        // Lo guardamos en Render
         const fileStream = fs.createWriteStream(outputPath);
-        await pipeline(fileResponse.body, fileStream);
+        
+        // Node 18+: Descargar el stream de la web directo al disco
+        await pipeline(Readable.fromWeb(fileResponse.body), fileStream);
 
         const stats = fs.statSync(outputPath);
         const fileSizeInMB = stats.size / (1024 * 1024);
